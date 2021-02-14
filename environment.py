@@ -6,7 +6,7 @@ class AgentVRP():
     def __init__(self, input):
         depot = input[0] # (batch_size, 2)
         loc = input[1] # (batch_size, n_nodes, 2)
-        demand = input[2]
+        self.demand = input[2] # (batch_size, n_nodes)
 
         self.batch_size, self.n_loc, _ = loc.shape
 
@@ -14,7 +14,7 @@ class AgentVRP():
         self.coords = torch.cat((depot[:, None, :], loc), dim=-2)
 
         # Indices of graphs in batch
-        self.ids = torch.arange(self.batch_size)[:, None] # (batch_size, 1)
+        self.ids = torch.arange(self.batch_size) # (batch_size)
 
         # State
         self.prev_a = torch.zeros(self.batch_size, 1)
@@ -26,10 +26,6 @@ class AgentVRP():
 
         # Step counter
         self.i = torch.zeros(1, dtype=torch.int64)
-
-        # Constant tensors for scatter update (in step method)
-        self.step_updates = torch.ones(self.batch_size, 1, dtype=torch.uint8)
-        self.scatter_zeros = torch.zeros(self.batch_size, 1, dtype=torch.int64)
 
     @staticmethod
     def outer_pr(a, b):
@@ -69,17 +65,57 @@ class AgentVRP():
         """
         return (torch.all(self.from_depot == 1) and self.i != 0).item()
 
-batches = 3
+    def get_mask(self):
+        """ Returns a mask (batch_size, 1, n_nodes) with available actions.
+            Impossible nodes are masked.
+        """
 
+        # Exclude depot
+        visited_loc = self.visited[:, :, 1:]
 
-depot = torch.randn(batches, 2)
-loc = torch.randn(batches, 4, 2)
-demand = torch.randint(9, (batches, 5))
+        # Mark nodes which exceed vehicle capacity
+        exceeds_cap = self.demand + self.used_capacity > self.VEHICLE_CAPACITY
 
-agent = AgentVRP((depot, loc, demand))
+        # Maks nodes that area already visited or have too much demand or when they arrived to depot
+        mask_loc = (visited_loc == 1) | (exceeds_cap[:, None, :]) \
+            | ((self.i > 0) & self.from_depot[:, None, :])
+        
+        # We can choose depot if we are not in depot OR all nodes are visited
+        # equivalent to: we mask the depot if we are in it AND there're still mode nodes to visit 
+        mask_depot = self.from_depot[:, None, :] & ((mask_loc == False).sum(dim=-1, keepdims=True) > 0)
 
-print(agent.all_finished())
-print('-------------------')
-print(agent.partial_finished())
-print('-------------------')
-print(agent.get_att_mask())
+        return torch.cat([mask_depot, mask_loc], dim=-1)
+
+    def step(self, action):
+
+        # Update current state
+        selected = action[:, None]
+        self.prev_a = selected
+        self.from_depot = self.prev_a == 0
+
+        # Shift indices by 1 since self.demand doesn't consider depot
+        selected_demand = self.demand.gather(-1, (self.prev_a - 1).clamp_min(0).view(-1, 1)) # (batch_size, 1)
+
+        # Add current node capacity to used capacity and set it to 0 if we return from depot
+        self.used_capacity = (self.used_capacity + selected_demand) * (self.from_depot == False)
+
+        # Update visited nodes (set 1 to visited nodes)
+        print(self.visited[self.ids, [0], action])
+        self.visited[self.ids, [0], action] = 1
+        
+        self.i += 1
+
+    @staticmethod
+    def get_costs(dataset, pi):
+        
+        # Place nodes with coordinates in order of decoder tour
+        loc_with_depot = torch.cat((dataset[0][:, None, :], dataset[1]), dim=1) # (batch_size, n_nodes, 2)
+        d = loc_with_depot.gather(1, pi.view(pi.shape[0], -1, 1).repeat_interleave(2, -1))
+
+        # Calculation of total distance
+        # Note: first element of pi is not depot, but the first selected node in path
+        # and last element from longest path is not depot
+
+        return ((torch.norm(d[:, 1:] - d[:, :-1], dim=-1)).sum(dim=-1) # intra node distances
+            + (torch.norm(d[:, 0] - dataset[0], dim=-1))  # distance from depot to first
+            + (torch.norm(d[:, -1] - dataset[0], dim=-1))) # distance from last node of longest path to depot
