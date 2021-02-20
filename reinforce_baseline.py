@@ -11,7 +11,6 @@ from utils import generate_data_onfly
 def copy_of_tf_model(model, embedding_dim=128, graph_size=20):
     """Copy model weights to new model
     """
-    # https://stackoverflow.com/questions/56841736/how-to-copy-a-network-in-tensorflow-2-0
     CAPACITIES = {10: 20.,
                   20: 30.,
                   50: 40.,
@@ -25,12 +24,11 @@ def copy_of_tf_model(model, embedding_dim=128, graph_size=20):
     new_model = AttentionDynamicModel(embedding_dim)
     set_decode_type(new_model, "sampling")
     _, _ = new_model(data_random)
-
-    #for a, b in zip(new_model.variables, model.variables):
-    #    a.assign(b)
-    for a,b in zip(new_model.parameters(), model.parameters()):
-        a.copy_(b) #como alternativa, checar .named_parameters() y .data()
     
+    model_dict = model.state_dict()
+    new_model.load_state_dict(model_dict)
+    
+    new_model.eval()
 
     return new_model
 
@@ -117,9 +115,7 @@ class RolloutBaseline:
                                           embedding_dim=self.embedding_dim,
                                           graph_size=self.graph_size)
 
-            # For checkpoint
-            #self.model.save_weights('baseline_checkpoint_epoch_{}_{}.h5'.format(epoch, self.filename), save_format='h5')
-            torch.save(self.model.state_dict(),'baseline_checkpoint_epoch_{}_{}.h5'.format(epoch, self.filename))
+            torch.save(self.model.state_dict(),'baseline_checkpoint_epoch_{}_{}'.format(epoch, self.filename))
             
         # We generate a new dataset for baseline model on each baseline update to prevent possible overfitting
         self.dataset = generate_data_onfly(num_samples=self.num_samples, graph_size=self.graph_size)
@@ -150,7 +146,7 @@ class RolloutBaseline:
         if self.alpha < 1:
             v_ema = self.ema_eval(cost)
         else:
-            v_ema = 0.0
+            v_ema = torch.tensor(0.0)
 
         v_b, _ = self.model(batch)
 
@@ -202,7 +198,6 @@ class RolloutBaseline:
 def load_tf_model(path, embedding_dim=128, graph_size=20, n_encode_layers=2):
     """Load model weights from hd5 file
     """
-    # https://stackoverflow.com/questions/51806852/cant-save-custom-subclassed-model
     CAPACITIES = {10: 20.,
                   20: 30.,
                   50: 40.,
