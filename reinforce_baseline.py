@@ -8,7 +8,7 @@ from attention_dynamic_model import set_decode_type
 from utils import generate_data_onfly
 
 
-def copy_of_tf_model(model, embedding_dim=128, graph_size=20):
+def copy_of_pt_model(model, embedding_dim=128, graph_size=20):
     """Copy model weights to new model
     """
     CAPACITIES = {10: 20.,
@@ -107,11 +107,11 @@ class RolloutBaseline:
         # Load or copy baseline model based on self.from_checkpoint condition
         if self.from_checkpoint and self.alpha == 0:
             print('Baseline model loaded')
-            self.model = load_tf_model(self.path_to_checkpoint,
+            self.model = load_pt_model(self.path_to_checkpoint,
                                        embedding_dim=self.embedding_dim,
                                        graph_size=self.graph_size)
         else:
-            self.model = copy_of_tf_model(model,
+            self.model = copy_of_pt_model(model,
                                           embedding_dim=self.embedding_dim,
                                           graph_size=self.graph_size)
 
@@ -195,7 +195,7 @@ class RolloutBaseline:
             print(f"alpha was updated to {self.alpha}")
 
             
-def load_tf_model(path, embedding_dim=128, graph_size=20, n_encode_layers=2):
+def load_pt_model(path, embedding_dim=128, graph_size=20, n_encode_layers=2):
     """Load model weights from hd5 file
     """
     CAPACITIES = {10: 20.,
