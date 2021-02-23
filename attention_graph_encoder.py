@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from layers import MultiHeadAttention
 
 class MultiHeadAttentionLayer(nn.Module):
     """Feed-Forward Sublayer: fully-connected Feed-Forward network,
@@ -23,10 +23,10 @@ class MultiHeadAttentionLayer(nn.Module):
 
     def __init__(self, input_dim, num_heads, feed_forward_hidden=512, **kwargs):
         super().__init__(**kwargs)
-        self.mha = MultiHeadAttention(n_heads=num_heads, d_model=input_dim, d_query=input_dim, d_value=d_value)
+        self.mha = MultiHeadAttention(n_heads=num_heads, d_model=input_dim, d_query=input_dim, d_value=input_dim)
         
-        self.ff1 = nn.Linear(feed_forward_hidden, input_dim)
-        self.ff2 = nn.Linear(input_dim, input_dim)
+        self.ff1 = nn.Linear(input_dim, feed_forward_hidden)
+        self.ff2 = nn.Linear(feed_forward_hidden, input_dim)
 
     def call(self, x, mask=None):
         mha_out = self.mha(x, x, x, mask)
@@ -71,7 +71,7 @@ class GraphAttentionEncoder(nn.Module):
         self.feed_forward_hidden = feed_forward_hidden
 
         # initial embeddings (batch_size, n_nodes-1, 2) --> (batch-size, input_dim), separate for depot and other nodes
-        self.init_embed_depot = nn.Linear(self.input_dim, self.input_dim)  # nn.Linear(2, embedding_dim)
+        self.init_embed_depot = nn.Linear(2, self.input_dim)  # nn.Linear(2, embedding_dim)
         self.init_embed = nn.Linear(self.input_dim, self.input_dim)
 
         self.mha_layers = [MultiHeadAttentionLayer(self.input_dim, self.num_heads, self.feed_forward_hidden)
