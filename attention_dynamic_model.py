@@ -119,30 +119,20 @@ class AttentionDynamicModel(nn.Module):
 
     def forward(self, inputs, return_pi=False):
 
-        embeddings, mean_graph_emb = self.embedder(inputs)
-
-        self.batch_size = embeddings.shape[0]
-
         outputs = []
         sequences = []
 
+        self.batch_size = inputs.shape[0]
         state = self.problem(inputs)
 
-        K_tanh, Q_context, K, V = self.get_projections(embeddings, mean_graph_emb)
-
         # Perform decoding steps
-        i = 0
-        inner_i = 0
-
         while not state.all_finished():
 
-            if i > 0:
-                state.i = torch.zeros(1, dtype=torch.int64)
-                att_mask, cur_num_nodes = state.get_att_mask()
-                embeddings, context_vectors = self.embedder(inputs, att_mask, cur_num_nodes)
-                K_tanh, Q_context, K, V = self.get_projections(embeddings, context_vectors)
+            state.i = torch.zeros(1, dtype=torch.int64)
+            att_mask, cur_num_nodes = state.get_att_mask()
+            embeddings, context_vectors = self.embedder(inputs, att_mask, cur_num_nodes)
+            K_tanh, Q_context, K, V = self.get_projections(embeddings, context_vectors)
 
-            inner_i = 0
             while not state.partial_finished():
 
                 step_context = self.get_step_context(state, embeddings)  # (batch_size, 1, input_dim + 1)
@@ -168,10 +158,6 @@ class AttentionDynamicModel(nn.Module):
 
                 outputs.append(log_p[:, 0, :])
                 sequences.append(selected)
-
-                inner_i += 1
-
-            i += 1
 
         _log_p = torch.stack(outputs, dim=1) # (batch_size, len(outputs), nodes)
         pi = torch.stack(sequences, dim=1).to(torch.float32) # (batch_size, len(outputs))

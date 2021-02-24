@@ -37,6 +37,9 @@ class AgentVRP():
     def get_att_mask(self):
         """ Mask (batchsize, n_nodes, n_nodes) for attention encoder.
             We maks alredy visited nodes except for depot (can be visited multiple times).
+
+            True -> should mask (can NOT visit)
+            False -> shouldn't mask (can visit)
         """
         # Remove depot from mask (1st column)
         att_mask = torch.squeeze(self.visited, dim=-2)[:, 1:] # (batch_size, 1, n_nodes) -> (batch_size, n_nodes-1)
@@ -68,6 +71,9 @@ class AgentVRP():
     def get_mask(self):
         """ Returns a mask (batch_size, 1, n_nodes) with available actions.
             Impossible nodes are masked.
+
+            True -> should mask (can NOT visit)
+            False -> shouldn't mask (can visit)
         """
 
         # Exclude depot
