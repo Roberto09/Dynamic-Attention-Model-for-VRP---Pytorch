@@ -72,7 +72,7 @@ class GraphAttentionEncoder(nn.Module):
 
         # initial embeddings (batch_size, n_nodes-1, 2) --> (batch-size, input_dim), separate for depot and other nodes
         self.init_embed_depot = nn.Linear(2, self.input_dim)  # nn.Linear(2, embedding_dim)
-        self.init_embed = nn.Linear(self.input_dim, self.input_dim)
+        self.init_embed = nn.Linear(3, self.input_dim)
 
         self.mha_layers = [MultiHeadAttentionLayer(self.input_dim, self.num_heads, self.feed_forward_hidden)
                             for _ in range(self.num_layers)]
