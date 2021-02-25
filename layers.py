@@ -20,9 +20,9 @@ class MultiHeadAttention(nn.Module):
 
         Args:
             num_heads: number of attention heads which will be computed in parallel
-            d_model: embedding size of output features
-            d_query: depth_q, i.e. the dimension of the query vectors *should be the same as q_key
-            d_value: depth_v, i.e. the dimension of the value vectors 
+            d_model: embedding size of output AND input features
+            * in reality it shouldn't be neccesary that input and ouptut features are the same dimension
+              but its the current case for this class.
 
         Call arguments:
             q: query, shape (..., seq_len_q, depth_q)
@@ -35,17 +35,17 @@ class MultiHeadAttention(nn.Module):
         Returns:
               attention outputs of shape (batch_size, seq_len_q, d_model)
     """
-    def __init__(self, n_heads, d_model, d_query, d_value, **kwargs):
+    def __init__(self, n_heads, d_model, **kwargs):
         super(MultiHeadAttention, self).__init__()
-        self.n_heads, self.d_model, self.d_query, self.d_value = n_heads, d_model, d_query, d_value
+        self.n_heads, self.d_model = n_heads, d_model
         self.head_depth = self.d_model // self.n_heads
         
         assert self.d_model % self.n_heads == 0
 
         # define weight matrices
-        self.wq = nn.Linear(self.d_query, self.d_model, bias=False)
-        self.wk = nn.Linear(self.d_query, self.d_model, bias=False)
-        self.wv = nn.Linear(self.d_value, self.d_model, bias=False)
+        self.wq = nn.Linear(self.d_model, self.d_model, bias=False)
+        self.wk = nn.Linear(self.d_model, self.d_model, bias=False)
+        self.wv = nn.Linear(self.d_model, self.d_model, bias=False)
         
         self.w_out = nn.Linear(self.d_model, self.d_model, bias=False)
 
