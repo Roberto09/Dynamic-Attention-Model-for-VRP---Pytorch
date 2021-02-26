@@ -110,11 +110,12 @@ class RolloutBaseline:
             self.model = load_pt_model(self.path_to_checkpoint,
                                        embedding_dim=self.embedding_dim,
                                        graph_size=self.graph_size)
+            model.eval()
         else:
             self.model = copy_of_pt_model(model,
                                           embedding_dim=self.embedding_dim,
                                           graph_size=self.graph_size)
-
+            model.eval()
             torch.save(self.model.state_dict(),'baseline_checkpoint_epoch_{}_{}'.format(epoch, self.filename))
             
         # We generate a new dataset for baseline model on each baseline update to prevent possible overfitting

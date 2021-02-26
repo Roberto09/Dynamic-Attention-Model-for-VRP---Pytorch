@@ -100,7 +100,6 @@ class AgentVRP():
         self.used_capacity = (self.used_capacity + selected_demand) * (self.from_depot == False)
 
         # Update visited nodes (set 1 to visited nodes)
-        print(self.visited[self.ids, [0], action])
         self.visited[self.ids, [0], action] = 1
         
         self.i += 1
