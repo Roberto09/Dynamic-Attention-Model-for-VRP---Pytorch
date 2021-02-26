@@ -36,8 +36,10 @@ def rollout(model, dataset, batch_size = 1000, disable_tqdm = False):
     # Evaluate model in greedy mode
     set_decode_type(model, "greedy")
     costs_list = []
-
-    for batch in tqdm(dataset.batch(batch_size), disable=disable_tqdm, desc="Rollout greedy execution"):
+    
+    train_batches = FastTensorDataLoader(dataset[0],dataset[1],dataset[2], batch_size=batch_size, shuffle=False)
+    
+    for batch in tqdm(train_batches, disable=disable_tqdm, desc="Rollout greedy execution"):
         cost, _ = model(batch)
         costs_list.append(cost)
 
