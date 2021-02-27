@@ -8,7 +8,18 @@ from reinforce_baseline import validate
 from utils import generate_data_onfly, get_results, get_cur_time
 from time import gmtime, strftime
 
+class IterativeMean():
+    def __init__(self):
+        self.sum = 0
+        self.n = 0
 
+    def update_state(self, val):
+        self.sum += val
+        self.n += 1
+
+    def result(self):
+        return self.sum / self.n
+      
 def train_model(optimizer,
                 model_torch,
                 baseline,
@@ -50,7 +61,9 @@ def train_model(optimizer,
         """
         loss, cost = rein_loss(model, inputs, baseline, num_batch)
         loss.backward()
-        return loss, cost
+        grads = [param.grad.view(-1) for param in model.parameters()]
+        grads = torch.cat(grads)
+        return loss, cost, grads
         
     # For plotting
     train_loss_results = []
@@ -63,8 +76,8 @@ def train_model(optimizer,
         # Create dataset on current epoch
         data = generate_data_onfly(num_samples=samples, graph_size=graph_size)
 
-        epoch_loss_avg_aux = []
-        epoch_cost_avg_aux = []
+        epoch_loss_avg = IterativeMean()
+        epoch_cost_avg = IterativeMean()
 
         # Skip warm-up stage when we continue training from checkpoint
         if from_checkpoint and baseline.alpha != 1.0:
@@ -82,12 +95,14 @@ def train_model(optimizer,
         for num_batch, x_batch in tqdm(enumerate(train_batches), desc="batch calculation at epoch {}".format(epoch)):
 
             # Optimize the model
-            loss_value, cost_val = grad(model_torch, x_batch, baseline, num_batch)
+            loss_value, cost_val, grads = grad(model_torch, x_batch, baseline, num_batch)
 
             # Clip gradients by grad_norm_clipping
-            init_global_norm = torch.linalg.norm(model_torch.parameters)
+            init_global_norm = torch.linalg.norm(grads)
             torch.nn.utils.clip_grad_norm_(model_torch.parameters(), grad_norm_clipping)
-            global_norm = torch.linalg.norm(model_torch.parameters)
+            grads = [param.grad.view(-1) for param in model.parameters()]
+            grads = torch.cat(grads)
+            global_norm = torch.linalg.norm(grads)
 
             if num_batch%batch_verbose == 0:
                 print("grad_global_norm = {}, clipped_norm = {}".format(init_global_norm.numpy(), global_norm.numpy()))
@@ -95,14 +110,11 @@ def train_model(optimizer,
             optimizer.step()
 
             # Track progress
-            epoch_loss_avg_aux.append(loss_value)
-            epoch_cost_avg_aux.append(cost_val)
-            
-            epoch_loss_avg = torch.mean(torch.tensor(epoch_loss_avg_aux))
-            epoch_cost_avg = torch.mean(torch.tensor(epoch_cost_avg_aux))
+            epoch_loss_avg.update_state(loss_value)
+            epoch_cost_avg.update_state(cost_val)
 
             if num_batch%batch_verbose == 0:
-                print("Epoch {} (batch = {}): Loss: {}: Cost: {}".format(epoch, num_batch, epoch_loss_avg, epoch_cost_avg))
+                print("Epoch {} (batch = {}): Loss: {}: Cost: {}".format(epoch, num_batch, epoch_loss_avg.result(), epoch_cost_avg.result()))
 
         # Update baseline if the candidate model is good enough. In this case also create new baseline dataset
         baseline.epoch_callback(model_torch, epoch)
@@ -115,8 +127,8 @@ def train_model(optimizer,
         val_cost = validate(validation_dataset, model_torch, val_batch_size)
         val_cost_avg.append(val_cost)
 
-        train_loss_results.append(epoch_loss_avg)
-        train_cost_results.append(epoch_cost_avg)
+        train_loss_results.append(epoch_loss_avg.result())
+        train_cost_results.append(epoch_cost_avg.result())
 
         pd.DataFrame(data={'epochs': list(range(start_epoch, epoch+1)),
                            'train_loss': [x.numpy() for x in train_loss_results],
@@ -124,7 +136,7 @@ def train_model(optimizer,
                            'val_cost': [x.numpy() for x in val_cost_avg]
                            }).to_csv('backup_results_' + filename + '.csv', index=False)
 
-        print(get_cur_time(), "Epoch {}: Loss: {}: Cost: {}".format(epoch, epoch_loss_avg, epoch_cost_avg))
+        print(get_cur_time(), "Epoch {}: Loss: {}: Cost: {}".format(epoch, epoch_loss_avg.result(), epoch_cost_avg.result()))
 
     # Make plots and save results
     filename_for_results = filename + '_start={}, end={}'.format(start_epoch, end_epoch)
