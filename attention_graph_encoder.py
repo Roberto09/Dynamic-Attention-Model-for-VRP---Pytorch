@@ -23,7 +23,7 @@ class MultiHeadAttentionLayer(nn.Module):
 
     def __init__(self, input_dim, num_heads, feed_forward_hidden=512, **kwargs):
         super().__init__(**kwargs)
-        self.mha = MultiHeadAttention(n_heads=num_heads, d_model=input_dim, d_query=input_dim, d_value=input_dim)
+        self.mha = MultiHeadAttention(n_heads=num_heads, d_model=input_dim)
         
         self.ff1 = nn.Linear(input_dim, feed_forward_hidden)
         self.ff2 = nn.Linear(feed_forward_hidden, input_dim)
