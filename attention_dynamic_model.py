@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import Categorical from torch.distributions.categorical
 import math
 import numpy as np
 
@@ -8,7 +9,7 @@ from attention_graph_encoder import GraphAttentionEncoder
 from environment import AgentVRP
 
 def set_decode_type(model, decode_type):
-    pass
+    model.set_decode_type(decode_type)
 
 class AttentionDynamicModel(nn.Module):
 
@@ -18,10 +19,54 @@ class AttentionDynamicModel(nn.Module):
                  n_heads=8,
                  tanh_clipping=10.
                  ):
-        pass
+        
+        super().__init__()
+
+        # attributes for MHA
+        self.embedding_dim = embedding_dim
+        self.n_encode_layers = n_encode_layers
+        self.decode_type = None
+
+        # attributes for VRP problem
+        self.problem = AgentVRP
+        self.n_heads = n_heads
+
+        # Encoder part
+        self.embedder = GraphAttentionEncoder(input_dim=self.embedding_dim,
+                                              num_heads=self.n_heads,
+                                              num_layers=self.n_encode_layers
+                                              )
+
+        # Decoder part
+
+        self.output_dim = self.embedding_dim
+        self.num_heads = n_heads
+
+        self.head_depth = self.output_dim // self.num_heads  
+        self.dk_mha_decoder = self.head_depth.float()  # for decoding in mha_decoder
+        self.dk_get_loc_p = self.output_dim.float()  # for decoding in mha_decoder
+
+        if self.output_dim % self.num_heads != 0:
+            raise ValueError("number of heads must divide d_model=output_dim")
+
+        self.tanh_clipping = tanh_clipping
+
+        # we split projection matrix Wq into 2 matrices: Wq*[h_c, h_N, D] = Wq_context*h_c + Wq_step_context[h_N, D]
+        self.wq_context = nn.Linear(self.embedding_dim, self.output_dim)  # (d_q_context, output_dim)
+        self.wq_step_context = nn.Linear(self.embedding_dim, self.output_dim, bias=False)  # (d_q_step_context, output_dim)
+
+        # we need two Wk projections since there is MHA followed by 1-head attention - they have different keys K
+        self.wk = nn.Linear(self.embedding_dim, self.output_dim, bias=False)  # (d_k, output_dim)
+        self.wk_tanh = nn.Linear(self.embedding_dim, self.output_dim, bias=False)  # (d_k_tanh, output_dim)
+
+        # we dont need Wv projection for 1-head attention: only need attention weights as outputs
+        self.wv = nn.Linear(self.embedding_dim, self.output_dim, bias=False)  # (d_v, output_dim)
+
+        # we dont need wq for 1-head tanh attention, since we can absorb it into w_out
+        self.w_out = nn.Linear(self.output_dim, self.output_dim, bias=False)  # (d_model, d_model)
 
     def set_decode_type(self, decode_type):
-        pass
+        self.decode_type = decode_type
 
     def split_heads(self, tensor, batch_size):
         """Function for computing attention on several heads simultaneously
@@ -34,7 +79,21 @@ class AttentionDynamicModel(nn.Module):
     def _select_node(self, logits):
         """Select next node based on decoding type.
         """
-        pass
+
+        # assert tf.reduce_all(logits) == logits, "Probs should not contain any nans"
+
+        if self.decode_type == "greedy":
+            selected = torch.argmax(logits, dim=-1)  # (batch_size, 1)
+
+        elif self.decode_type == "sampling":
+            # logits has a shape of (batch_size, 1, n_nodes), we have to squeeze it
+            # to (batch_size, n_nodes) since tf.random.categorical requires matrix
+            cat_dist = Categorical(logits[:, 0, :]) # creates categorical distribution from tensor (batch_size)
+            selected = cat_dist.sample() # takes a single sample from distribution
+        else:
+            assert False, "Unknown decode type"
+
+        return torch.squeeze(selected, -1)  # (batch_size,)
 
     def get_step_context(self, state, embeddings):
         """Takes a state and graph embeddings,
@@ -101,7 +160,15 @@ class AttentionDynamicModel(nn.Module):
         return log_p
 
     def get_log_likelihood(self, _log_p, a):
-        pass
+
+        pass # TODO: implement gather_nd in pytorch 
+        
+        # Get log_p corresponding to selected actions
+        log_p = gather_nd(_log_p, torch.reshape(a, tuple(a.shape)+(1,)).int(), batch_dims=2)
+
+        # Calculate log_likelihood
+        return torch.sum(log_p,1)
+
 
     def get_projections(self, embeddings, context_vectors):
 
