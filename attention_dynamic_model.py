@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import Categorical from torch.distributions.categorical
+from torch.distributions.categorical import Categorical
 import math
 import numpy as np
 
@@ -63,7 +63,7 @@ class AttentionDynamicModel(nn.Module):
         self.wv = nn.Linear(self.embedding_dim, self.output_dim, bias=False)  # (d_v, output_dim)
 
         # we dont need wq for 1-head tanh attention, since we can absorb it into w_out
-        self.w_out = nn.Linear(self.output_dim, self.output_dim, bias=False)  # (d_model, d_model)
+        self.w_out = nn.Linear(self.embedding_dim, self.output_dim, bias=False)  # (d_model, d_model)
 
     def set_decode_type(self, decode_type):
         self.decode_type = decode_type
@@ -160,14 +160,14 @@ class AttentionDynamicModel(nn.Module):
         return log_p
 
     def get_log_likelihood(self, _log_p, a):
-
-        pass # TODO: implement gather_nd in pytorch 
         
         # Get log_p corresponding to selected actions
-        log_p = gather_nd(_log_p, torch.reshape(a, tuple(a.shape)+(1,)).int(), batch_dims=2)
-
+        indices = a.view(a.shape[0], -1, 1)
+        select = _log_p.gather(-1, indices)
+        log_p = select.view(select.shape[0], -1)
+        
         # Calculate log_likelihood
-        return torch.sum(log_p,1)
+        return log_p.sum(dim=-1)
 
 
     def get_projections(self, embeddings, context_vectors):
