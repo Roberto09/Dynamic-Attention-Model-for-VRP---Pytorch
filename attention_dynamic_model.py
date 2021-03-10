@@ -43,8 +43,8 @@ class AttentionDynamicModel(nn.Module):
         self.num_heads = n_heads
 
         self.head_depth = self.output_dim // self.num_heads  
-        self.dk_mha_decoder = self.head_depth.float()  # for decoding in mha_decoder
-        self.dk_get_loc_p = self.output_dim.float()  # for decoding in mha_decoder
+        self.dk_mha_decoder = float(self.head_depth)  # for decoding in mha_decoder
+        self.dk_get_loc_p = float(self.output_dim)  # for decoding in mha_decoder
 
         if self.output_dim % self.num_heads != 0:
             raise ValueError("number of heads must divide d_model=output_dim")
@@ -53,7 +53,7 @@ class AttentionDynamicModel(nn.Module):
 
         # we split projection matrix Wq into 2 matrices: Wq*[h_c, h_N, D] = Wq_context*h_c + Wq_step_context[h_N, D]
         self.wq_context = nn.Linear(self.embedding_dim, self.output_dim)  # (d_q_context, output_dim)
-        self.wq_step_context = nn.Linear(self.embedding_dim, self.output_dim, bias=False)  # (d_q_step_context, output_dim)
+        self.wq_step_context = nn.Linear(self.embedding_dim + 1, self.output_dim, bias=False)  # (d_q_step_context, output_dim)
 
         # we need two Wk projections since there is MHA followed by 1-head attention - they have different keys K
         self.wk = nn.Linear(self.embedding_dim, self.output_dim, bias=False)  # (d_k, output_dim)
