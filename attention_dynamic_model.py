@@ -6,6 +6,7 @@ import math
 import numpy as np
 
 from attention_graph_encoder import GraphAttentionEncoder
+from layers import scaled_attention
 from environment import AgentVRP
 
 def set_decode_type(model, decode_type):
