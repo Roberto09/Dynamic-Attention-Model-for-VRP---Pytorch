@@ -28,7 +28,7 @@ class MultiHeadAttentionLayer(nn.Module):
         self.ff1 = nn.Linear(input_dim, feed_forward_hidden)
         self.ff2 = nn.Linear(feed_forward_hidden, input_dim)
 
-    def call(self, x, mask=None):
+    def forward(self, x, mask=None):
         mha_out = self.mha(x, x, x, mask)
         sc1_out = torch.add(x, mha_out)
         tanh1_out = torch.tanh(sc1_out)
@@ -77,7 +77,7 @@ class GraphAttentionEncoder(nn.Module):
         self.mha_layers = [MultiHeadAttentionLayer(self.input_dim, self.num_heads, self.feed_forward_hidden)
                             for _ in range(self.num_layers)]
 
-    def call(self, x, mask=None, cur_num_nodes=None):
+    def forward(self, x, mask=None, cur_num_nodes=None):
 
         x = torch.cat((self.init_embed_depot(x[0])[:, None, :],  # (batch_size, 2) --> (batch_size, 1, 2)
                        self.init_embed(torch.cat((x[1], x[2][:, :, None]), -1))  # (batch_size, n_nodes-1, 2) + (batch_size, n_nodes-1)

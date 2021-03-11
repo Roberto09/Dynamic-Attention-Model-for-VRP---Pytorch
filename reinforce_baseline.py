@@ -5,7 +5,7 @@ import numpy as np
 
 from attention_dynamic_model import AttentionDynamicModel
 from attention_dynamic_model import set_decode_type
-from utils import generate_data_onfly
+from utils import generate_data_onfly, FastTensorDataLoader
 
 
 def copy_of_pt_model(model, embedding_dim=128, graph_size=20):

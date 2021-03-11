@@ -128,7 +128,7 @@ class AttentionDynamicModel(nn.Module):
         # Add dimension to mask so that it can be broadcasted across heads
         # (batch_size, seq_len_q, seq_len_k) --> (batch_size, 1, seq_len_q, seq_len_k)
         if mask is not None:
-            mask.unsqueeze(1)
+            mask = mask.unsqueeze(1)
 
         attention = scaled_attention(Q, K, V, mask) # (batch_size, n_heads, seq_len_q, head_depth)
         # transpose attention to (batch_size, seq_len_q, n_heads, head_depth)
@@ -190,7 +190,7 @@ class AttentionDynamicModel(nn.Module):
         outputs = []
         sequences = []
 
-        self.batch_size = inputs.shape[0]
+        self.batch_size = inputs[0].shape[0]
         state = self.problem(inputs)
 
         # Perform decoding steps
@@ -228,7 +228,7 @@ class AttentionDynamicModel(nn.Module):
                 sequences.append(selected)
 
         _log_p = torch.stack(outputs, dim=1) # (batch_size, len(outputs), nodes)
-        pi = torch.stack(sequences, dim=1).to(torch.float32) # (batch_size, len(outputs))
+        pi = torch.stack(sequences, dim=1) # (batch_size, len(outputs))
 
         cost = self.problem.get_costs(inputs, pi)
 

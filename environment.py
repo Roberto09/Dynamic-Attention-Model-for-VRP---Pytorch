@@ -17,7 +17,7 @@ class AgentVRP():
         self.ids = torch.arange(self.batch_size) # (batch_size)
 
         # State
-        self.prev_a = torch.zeros(self.batch_size, 1)
+        self.prev_a = torch.zeros(self.batch_size, 1, dtype=torch.int64)
         self.from_depot = self.prev_a == 0
         self.used_capacity = torch.zeros(self.batch_size, 1)
 
