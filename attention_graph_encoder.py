@@ -76,6 +76,7 @@ class GraphAttentionEncoder(nn.Module):
 
         self.mha_layers = [MultiHeadAttentionLayer(self.input_dim, self.num_heads, self.feed_forward_hidden)
                             for _ in range(self.num_layers)]
+        self.mha_layers = nn.ModuleList(self.mha_layers)
 
     def forward(self, x, mask=None, cur_num_nodes=None):
 

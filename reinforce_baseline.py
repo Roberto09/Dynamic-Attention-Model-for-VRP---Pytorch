@@ -5,7 +5,7 @@ import numpy as np
 
 from attention_dynamic_model import AttentionDynamicModel
 from attention_dynamic_model import set_decode_type
-from utils import generate_data_onfly, FastTensorDataLoader
+from utils import generate_data_onfly, FastTensorDataLoader, get_dev_of_mod
 
 
 def copy_of_pt_model(model, embedding_dim=128, graph_size=20):
@@ -21,7 +21,7 @@ def copy_of_pt_model(model, embedding_dim=128, graph_size=20):
                torch.rand((2, graph_size, 2), dtype=torch.float32),
                torch.randint(low=1, high= 10, size=(2, graph_size), dtype=torch.float32)/CAPACITIES[graph_size]]
     
-    new_model = AttentionDynamicModel(embedding_dim)
+    new_model = AttentionDynamicModel(embedding_dim).to(get_dev_of_mod(model))
     set_decode_type(new_model, "sampling")
     _, _ = new_model(data_random)
     
@@ -32,13 +32,13 @@ def copy_of_pt_model(model, embedding_dim=128, graph_size=20):
 
     return new_model
 
-def rollout(model, dataset, batch_size = 1000, disable_tqdm = False):
+def rollout(model, dataset, batch_size = 30, disable_tqdm = False):
     # Evaluate model in greedy mode
     set_decode_type(model, "greedy")
     costs_list = []
-    
+
     train_batches = FastTensorDataLoader(dataset[0],dataset[1],dataset[2], batch_size=batch_size, shuffle=False)
-    
+
     for batch in tqdm(train_batches, disable=disable_tqdm, desc="Rollout greedy execution"):
         cost, _ = model(batch)
         costs_list.append(cost)
@@ -112,14 +112,14 @@ class RolloutBaseline:
             self.model = load_pt_model(self.path_to_checkpoint,
                                        embedding_dim=self.embedding_dim,
                                        graph_size=self.graph_size)
-            model.eval()
+            self.model.eval()
         else:
             self.model = copy_of_pt_model(model,
                                           embedding_dim=self.embedding_dim,
                                           graph_size=self.graph_size)
-            model.eval()
+            self.model.eval()
             torch.save(self.model.state_dict(),'baseline_checkpoint_epoch_{}_{}'.format(epoch, self.filename))
-            
+        
         # We generate a new dataset for baseline model on each baseline update to prevent possible overfitting
         self.dataset = generate_data_onfly(num_samples=self.num_samples, graph_size=self.graph_size)
 
