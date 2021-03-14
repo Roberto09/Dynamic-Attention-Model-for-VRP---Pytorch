@@ -163,15 +163,12 @@ class AttentionDynamicModel(nn.Module):
 
         return log_p
 
-    def get_log_likelihood(self, _log_p, a):
+    def get_likelihood_selection(self, _log_p, a):
         
-        # Get log_p corresponding to selected actions
-        indices = a.view(a.shape[0], -1, 1)
+        # Get log_p corresponding to selected actions for every batch
+        indices = a.view(a.shape[0], -1)
         select = _log_p.gather(-1, indices)
-        log_p = select.view(select.shape[0], -1)
-        
-        # Calculate log_likelihood
-        return log_p.sum(dim=-1)
+        return select.view(-1)
 
 
     def get_projections(self, embeddings, context_vectors):
@@ -190,23 +187,21 @@ class AttentionDynamicModel(nn.Module):
 
     def forward(self, inputs, return_pi=False):
 
-        outputs = []
-        sequences = []
-
         self.batch_size = inputs[0].shape[0]
+
         state = self.problem(inputs) # use CPU inputs for state
         inputs = self.set_input_device(inputs) # sent inputs to GPU for training if it's being used
         # Perform decoding steps
+
+        ll = torch.zeros(self.batch_size)
+        sequences = []
+
         while not state.all_finished():
 
             state.i = torch.zeros(1, dtype=torch.int64)
             att_mask, cur_num_nodes = state.get_att_mask()
             att_mask, cur_num_nodes = att_mask.to(self.dev), cur_num_nodes.to(self.dev)
-            # print('before embedder')
-            # time.sleep(10)
             embeddings, context_vectors = self.embedder(inputs, att_mask, cur_num_nodes)
-            # print('after embedder')
-            # time.sleep(10)
             K_tanh, Q_context, K, V = self.get_projections(embeddings, context_vectors)
 
             while not state.partial_finished():
@@ -228,21 +223,17 @@ class AttentionDynamicModel(nn.Module):
                 log_p = self.get_log_p(mha, K_tanh, mask)  # (batch_size, 1, n_nodes)
 
                 # next step is to select node
-                selected = self._select_node(log_p)
+                selected = self._select_node(log_p.detach()) # (batch_size,)
 
-                state.step(selected.cpu())
+                state.step(selected.detach().cpu())
 
-                outputs.append(log_p[:, 0, :].cpu())
-                sequences.append(selected.cpu())
+                ll = ll + self.get_likelihood_selection(log_p[:, 0, :].cpu(), selected.detach().cpu())
+                sequences.append(selected.detach().cpu())
                 
-                #torch.cuda.empty_cache()
+                torch.cuda.empty_cache()
 
-        _log_p = torch.stack(outputs, dim=1) # (batch_size, len(outputs), nodes)
         pi = torch.stack(sequences, dim=1) # (batch_size, len(outputs))
-
-        cost = self.problem.get_costs((inputs[0].cpu(), inputs[1].cpu(), inputs[2].cpu()), pi)
-
-        ll = self.get_log_likelihood(_log_p, pi)
+        cost = self.problem.get_costs((inputs[0].detach().cpu(), inputs[1].detach().cpu(), inputs[2].detach().cpu()), pi)
         if return_pi:
             return cost, ll, pi
 

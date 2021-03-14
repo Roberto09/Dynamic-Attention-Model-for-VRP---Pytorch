@@ -23,6 +23,7 @@ def copy_of_pt_model(model, embedding_dim=128, graph_size=20):
     
     new_model = AttentionDynamicModel(embedding_dim).to(get_dev_of_mod(model))
     set_decode_type(new_model, "sampling")
+    new_model.eval()
     _, _ = new_model(data_random)
     
     model_dict = model.state_dict()
@@ -32,7 +33,7 @@ def copy_of_pt_model(model, embedding_dim=128, graph_size=20):
 
     return new_model
 
-def rollout(model, dataset, batch_size = 30, disable_tqdm = False):
+def rollout(model, dataset, batch_size = 100, disable_tqdm = False):
     # Evaluate model in greedy mode
     set_decode_type(model, "greedy")
     costs_list = []
