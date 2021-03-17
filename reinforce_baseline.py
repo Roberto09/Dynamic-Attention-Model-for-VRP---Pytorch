@@ -33,16 +33,25 @@ def copy_of_pt_model(model, embedding_dim=128, graph_size=20):
 
     return new_model
 
-def rollout(model, dataset, batch_size = 100, disable_tqdm = False):
-    # Evaluate model in greedy mode
-    set_decode_type(model, "greedy")
+def get_costs_rollout(model, train_batches, disable_tqdm):
     costs_list = []
-
-    train_batches = FastTensorDataLoader(dataset[0],dataset[1],dataset[2], batch_size=batch_size, shuffle=False)
-
     for batch in tqdm(train_batches, disable=disable_tqdm, desc="Rollout greedy execution"):
         cost, _ = model(batch)
         costs_list.append(cost)
+        # torch.cuda.empty_cache()
+    return costs_list
+
+def rollout(model, dataset, batch_size = 1000, disable_tqdm = False):
+    # Evaluate model in greedy mode
+    set_decode_type(model, "greedy")
+
+    train_batches = FastTensorDataLoader(dataset[0],dataset[1],dataset[2], batch_size=batch_size, shuffle=False)
+
+    if not model.training:
+        with torch.no_grad():
+            costs_list = get_costs_rollout(model, train_batches, disable_tqdm)
+    else:
+        costs_list = get_costs_rollout(model, train_batches, disable_tqdm)
 
     return torch.cat(costs_list, dim=0)
 

@@ -191,11 +191,10 @@ class AttentionDynamicModel(nn.Module):
 
         state = self.problem(inputs) # use CPU inputs for state
         inputs = self.set_input_device(inputs) # sent inputs to GPU for training if it's being used
-        # Perform decoding steps
-
-        ll = torch.zeros(self.batch_size)
         sequences = []
+        ll = torch.zeros(self.batch_size)
 
+        # Perform decoding steps
         while not state.all_finished():
 
             state.i = torch.zeros(1, dtype=torch.int64)
@@ -227,10 +226,10 @@ class AttentionDynamicModel(nn.Module):
 
                 state.step(selected.detach().cpu())
 
-                ll = ll + self.get_likelihood_selection(log_p[:, 0, :].cpu(), selected.detach().cpu())
+                ll += self.get_likelihood_selection(log_p[:, 0, :].cpu(), selected.detach().cpu())
                 sequences.append(selected.detach().cpu())
-                
-                torch.cuda.empty_cache()
+                # torch.cuda.empty_cache()    
+            # torch.cuda.empty_cache()
 
         pi = torch.stack(sequences, dim=1) # (batch_size, len(outputs))
         cost = self.problem.get_costs((inputs[0].detach().cpu(), inputs[1].detach().cpu(), inputs[2].detach().cpu()), pi)
