@@ -7,6 +7,7 @@ from reinforce_baseline import validate
 
 from utils import generate_data_onfly, get_results, get_cur_time
 from time import gmtime, strftime
+from utils import FastTensorDataLoader
 
 class IterativeMean():
     def __init__(self):
@@ -100,12 +101,12 @@ def train_model(optimizer,
             # Clip gradients by grad_norm_clipping
             init_global_norm = torch.linalg.norm(grads)
             torch.nn.utils.clip_grad_norm_(model_torch.parameters(), grad_norm_clipping)
-            grads = [param.grad.view(-1) for param in model.parameters()]
+            grads = [param.grad.view(-1) for param in model_torch.parameters()]
             grads = torch.cat(grads)
             global_norm = torch.linalg.norm(grads)
 
             if num_batch%batch_verbose == 0:
-                print("grad_global_norm = {}, clipped_norm = {}".format(init_global_norm.numpy(), global_norm.numpy()))
+                print("grad_global_norm = {}, clipped_norm = {}".format(init_global_norm.cpu().numpy(), global_norm.cpu().numpy()))
 
             optimizer.step()
 
@@ -131,9 +132,9 @@ def train_model(optimizer,
         train_cost_results.append(epoch_cost_avg.result())
 
         pd.DataFrame(data={'epochs': list(range(start_epoch, epoch+1)),
-                           'train_loss': [x.numpy() for x in train_loss_results],
-                           'train_cost': [x.numpy() for x in train_cost_results],
-                           'val_cost': [x.numpy() for x in val_cost_avg]
+                           'train_loss': [x.cpu().numpy() for x in train_loss_results],
+                           'train_cost': [x.cpu().numpy() for x in train_cost_results],
+                           'val_cost': [x.cpu().numpy() for x in val_cost_avg]
                            }).to_csv('backup_results_' + filename + '.csv', index=False)
 
         print(get_cur_time(), "Epoch {}: Loss: {}: Cost: {}".format(epoch, epoch_loss_avg.result(), epoch_cost_avg.result()))

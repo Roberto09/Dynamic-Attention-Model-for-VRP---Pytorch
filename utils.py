@@ -268,3 +268,6 @@ def get_clean_path(arr):
 
     return output
 
+
+def get_dev_of_mod(model):
+    return next(model.parameters()).device

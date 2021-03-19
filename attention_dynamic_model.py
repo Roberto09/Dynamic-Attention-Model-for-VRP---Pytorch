@@ -8,6 +8,7 @@ import numpy as np
 from attention_graph_encoder import GraphAttentionEncoder
 from layers import scaled_attention
 from environment import AgentVRP
+from utils import get_dev_of_mod
 
 def set_decode_type(model, decode_type):
     model.set_decode_type(decode_type)
@@ -66,6 +67,8 @@ class AttentionDynamicModel(nn.Module):
         # we dont need wq for 1-head tanh attention, since we can absorb it into w_out
         self.w_out = nn.Linear(self.embedding_dim, self.output_dim, bias=False)  # (d_model, d_model)
 
+        self.dev = None
+
     def set_decode_type(self, decode_type):
         self.decode_type = decode_type
 
@@ -102,14 +105,14 @@ class AttentionDynamicModel(nn.Module):
            that is related to RL Agent last step.
         """
         # index of previous node
-        prev_node = state.prev_a  # (batch_size, 1)
+        prev_node = state.prev_a.to(self.dev)  # (batch_size, 1)
 
         # from embeddings=(batch_size, n_nodes, input_dim) select embeddings of previous nodes
         cur_embedded_node = embeddings.gather(1, prev_node.view(prev_node.shape[0], -1, 1)
                             .repeat_interleave(embeddings.shape[-1], -1)) # (batch_size, 1, input_dim)
 
         # add remaining capacity
-        step_context = torch.cat([cur_embedded_node, self.problem.VEHICLE_CAPACITY - state.used_capacity[:, :, None]], dim=-1)
+        step_context = torch.cat([cur_embedded_node, (self.problem.VEHICLE_CAPACITY - state.used_capacity[:, :, None]).to(self.dev)], dim=-1)
 
         return step_context  # (batch_size, 1, input_dim + 1)
 
@@ -160,15 +163,12 @@ class AttentionDynamicModel(nn.Module):
 
         return log_p
 
-    def get_log_likelihood(self, _log_p, a):
+    def get_likelihood_selection(self, _log_p, a):
         
-        # Get log_p corresponding to selected actions
-        indices = a.view(a.shape[0], -1, 1)
+        # Get log_p corresponding to selected actions for every batch
+        indices = a.view(a.shape[0], -1)
         select = _log_p.gather(-1, indices)
-        log_p = select.view(select.shape[0], -1)
-        
-        # Calculate log_likelihood
-        return log_p.sum(dim=-1)
+        return select.view(-1)
 
 
     def get_projections(self, embeddings, context_vectors):
@@ -187,17 +187,19 @@ class AttentionDynamicModel(nn.Module):
 
     def forward(self, inputs, return_pi=False):
 
-        outputs = []
-        sequences = []
-
         self.batch_size = inputs[0].shape[0]
-        state = self.problem(inputs)
+
+        state = self.problem(inputs) # use CPU inputs for state
+        inputs = self.set_input_device(inputs) # sent inputs to GPU for training if it's being used
+        sequences = []
+        ll = torch.zeros(self.batch_size)
 
         # Perform decoding steps
         while not state.all_finished():
 
             state.i = torch.zeros(1, dtype=torch.int64)
             att_mask, cur_num_nodes = state.get_att_mask()
+            att_mask, cur_num_nodes = att_mask.to(self.dev), cur_num_nodes.to(self.dev)
             embeddings, context_vectors = self.embedder(inputs, att_mask, cur_num_nodes)
             K_tanh, Q_context, K, V = self.get_projections(embeddings, context_vectors)
 
@@ -211,7 +213,7 @@ class AttentionDynamicModel(nn.Module):
                 Q = self.split_heads(Q, self.batch_size)  # (batch_size, num_heads, 1, head_depth)
 
                 # get current mask
-                mask = state.get_mask()  # (batch_size, 1, n_nodes) True -> mask, i.e. agent can NOT go
+                mask = state.get_mask().to(self.dev)  # (batch_size, 1, n_nodes) True -> mask, i.e. agent can NOT go
 
                 # compute MHA decoder vectors for current mask
                 mha = self.decoder_mha(Q, K, V, mask)  # (batch_size, 1, output_dim)
@@ -220,21 +222,22 @@ class AttentionDynamicModel(nn.Module):
                 log_p = self.get_log_p(mha, K_tanh, mask)  # (batch_size, 1, n_nodes)
 
                 # next step is to select node
-                selected = self._select_node(log_p)
+                selected = self._select_node(log_p.detach()) # (batch_size,)
 
-                state.step(selected)
+                state.step(selected.detach().cpu())
 
-                outputs.append(log_p[:, 0, :])
-                sequences.append(selected)
+                ll += self.get_likelihood_selection(log_p[:, 0, :].cpu(), selected.detach().cpu())
+                sequences.append(selected.detach().cpu())
+                # torch.cuda.empty_cache()    
+            # torch.cuda.empty_cache()
 
-        _log_p = torch.stack(outputs, dim=1) # (batch_size, len(outputs), nodes)
         pi = torch.stack(sequences, dim=1) # (batch_size, len(outputs))
-
-        cost = self.problem.get_costs(inputs, pi)
-
-        ll = self.get_log_likelihood(_log_p, pi)
-
+        cost = self.problem.get_costs((inputs[0].detach().cpu(), inputs[1].detach().cpu(), inputs[2].detach().cpu()), pi)
         if return_pi:
             return cost, ll, pi
 
         return cost, ll
+
+    def set_input_device(self, inp_tens):
+        if self.dev is None: self.dev = get_dev_of_mod(self)
+        return(inp_tens[0].to(self.dev), inp_tens[1].to(self.dev), inp_tens[2].to(self.dev))
