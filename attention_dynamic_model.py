@@ -227,6 +227,7 @@ class AttentionDynamicModel(nn.Module):
                 state.step(selected.detach().cpu())
 
                 ll += self.get_likelihood_selection(log_p[:, 0, :].cpu(), selected.detach().cpu())
+                
                 sequences.append(selected.detach().cpu())
                 # torch.cuda.empty_cache()    
             # torch.cuda.empty_cache()

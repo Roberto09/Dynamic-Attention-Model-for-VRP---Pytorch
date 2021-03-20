@@ -46,12 +46,14 @@ def rollout(model, dataset, batch_size = 1000, disable_tqdm = False):
     set_decode_type(model, "greedy")
 
     train_batches = FastTensorDataLoader(dataset[0],dataset[1],dataset[2], batch_size=batch_size, shuffle=False)
+    
+    model_was_training = model.training
+    model.eval()
 
-    if not model.training:
-        with torch.no_grad():
-            costs_list = get_costs_rollout(model, train_batches, disable_tqdm)
-    else:
+    with torch.no_grad():
         costs_list = get_costs_rollout(model, train_batches, disable_tqdm)
+
+    if model_was_training: model.train() # restore original model training state
 
     return torch.cat(costs_list, dim=0)
 
@@ -59,6 +61,7 @@ def rollout(model, dataset, batch_size = 1000, disable_tqdm = False):
 def validate(dataset, model, batch_size=1000):
     """Validates model on given dataset in greedy mode
     """
+    # rollout will set the model to eval mode and turn it back to it's original mode after it finishes
     val_costs = rollout(model, dataset, batch_size=batch_size)
     set_decode_type(model, "sampling")
     mean_cost = torch.mean(val_costs)
