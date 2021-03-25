@@ -124,14 +124,15 @@ class RolloutBaseline:
             print('Baseline model loaded')
             self.model = load_pt_model(self.path_to_checkpoint,
                                        embedding_dim=self.embedding_dim,
-                                       graph_size=self.graph_size)
+                                       graph_size=self.graph_size,
+                                       device = get_dev_of_mod(model))
             self.model.eval()
         else:
             self.model = copy_of_pt_model(model,
                                           embedding_dim=self.embedding_dim,
                                           graph_size=self.graph_size)
             self.model.eval()
-            torch.save(self.model.state_dict(),'baseline_checkpoint_epoch_{}_{}'.format(epoch, self.filename))
+            torch.save(self.model.state_dict(),'./checkpts/baseline_checkpoint_epoch_{}_{}'.format(epoch, self.filename))
         
         # We generate a new dataset for baseline model on each baseline update to prevent possible overfitting
         self.dataset = generate_data_onfly(num_samples=self.num_samples, graph_size=self.graph_size)
@@ -211,7 +212,7 @@ class RolloutBaseline:
             print(f"alpha was updated to {self.alpha}")
 
             
-def load_pt_model(path, embedding_dim=128, graph_size=20, n_encode_layers=2):
+def load_pt_model(path, embedding_dim=128, graph_size=20, n_encode_layers=2, device='cpu'):
     """Load model weights from hd5 file
     """
     CAPACITIES = {10: 20.,
@@ -224,7 +225,8 @@ def load_pt_model(path, embedding_dim=128, graph_size=20, n_encode_layers=2):
                torch.rand((2, graph_size, 2), dtype=torch.float32),
                torch.randint(low=1, high= 10, size=(2, graph_size), dtype=torch.float32)/CAPACITIES[graph_size]]
 
-    model_loaded = AttentionDynamicModel(embedding_dim,n_encode_layers=n_encode_layers)
+    model_loaded = AttentionDynamicModel(embedding_dim,n_encode_layers=n_encode_layers).to(device)
+
     set_decode_type(model_loaded, "greedy")
     _, _ = model_loaded(data_random)
 
