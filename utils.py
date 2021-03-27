@@ -284,7 +284,7 @@ def get_lhk_solved_data(path_instances, path_sols):
     - instances[i][3] -> capacity (of vehicle) (should be the same for all in theory)
 
     - sols[0][i][0] -> cost
-    - sols[0][i][1] -> path (doesn't include final node at the end)
+    - sols[0][i][1] -> path (doesn't include depot at the end)
     - sols[1] -> ?
     - sols[0][1][2] -> ?
     """
