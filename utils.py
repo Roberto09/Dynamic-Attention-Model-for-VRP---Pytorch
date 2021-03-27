@@ -276,7 +276,7 @@ def get_dev_of_mod(model):
 def _open_data(path):
     return open(path, 'rb')
 
-def get_lhk_solved_data(path_instances, path_samples):
+def get_lhk_solved_data(path_instances, path_sols):
     """
     - instances[i][0] -> depot(x, y)
     - instances[i][1] -> nodes(x, y) * 100
@@ -291,7 +291,7 @@ def get_lhk_solved_data(path_instances, path_samples):
 
     with _open_data(path_instances) as f:
         instances_data = pickle.load(f) 
-    with _open_data(path_samples) as f:
+    with _open_data(path_sols) as f:
         sols_data = pickle.load(f) 
 
     depot_locs = (list(map(lambda x: x[0], instances_data))) # (samples, 2)
