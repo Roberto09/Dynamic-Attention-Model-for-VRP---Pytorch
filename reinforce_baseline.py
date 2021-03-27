@@ -24,8 +24,8 @@ def copy_of_pt_model(model, embedding_dim=128, graph_size=20):
     new_model = AttentionDynamicModel(embedding_dim).to(get_dev_of_mod(model))
     set_decode_type(new_model, "sampling")
     new_model.eval()
-    _, _ = new_model(data_random)
-    
+    with torch.no_grad():
+        _, _ = new_model(data_random)
     model_dict = model.state_dict()
     new_model.load_state_dict(model_dict)
     
@@ -165,7 +165,8 @@ class RolloutBaseline:
         else:
             v_ema = torch.tensor(0.0)
 
-        v_b, _ = self.model(batch)
+        with torch.no_grad():
+            v_b, _ = self.model(batch)
 
         # Combination of baseline cost and exp. moving average cost
         return self.alpha * v_b.detach() + (1 - self.alpha) * v_ema.detach()
