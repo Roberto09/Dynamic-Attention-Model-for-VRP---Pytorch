@@ -271,3 +271,37 @@ def get_clean_path(arr):
 
 def get_dev_of_mod(model):
     return next(model.parameters()).device
+
+
+def _open_data(path):
+    return open(path, 'rb')
+
+def get_lhk_solved_data(path_instances, path_samples):
+    """
+    - instances[i][0] -> depot(x, y)
+    - instances[i][1] -> nodes(x, y) * 100
+    - instances[i][2] -> nodes(demand) * 100
+    - instances[i][3] -> capacity (of vehicle) (should be the same for all in theory)
+
+    - sols[0][i][0] -> cost
+    - sols[0][i][1] -> path (doesn't include final node at the end)
+    - sols[1] -> ?
+    - sols[0][1][2] -> ?
+    """
+
+    with _open_data(path_instances) as f:
+        instances_data = pickle.load(f) 
+    with _open_data(path_samples) as f:
+        sols_data = pickle.load(f) 
+
+    depot_locs = (list(map(lambda x: x[0], instances_data))) # (samples, 2)
+    nodes_locs = (list(map(lambda x: x[1], instances_data)))  # (samples, nodes, 2)
+    nodes_demand = (list(map(lambda x: x[2], instances_data))) # (samples, nodes)
+    instances = (depot_locs, nodes_locs, nodes_demand)
+
+    path_indices = list(map(lambda x: x[1], sols_data[0])) # (samples, path_len)
+    costs = list(map(lambda x: x[0], sols_data[0])) # (samples)
+
+    capacities = (list(map(lambda x: x[3], instances_data))) # (samples)
+
+    return instances, path_indices, costs, capacities
