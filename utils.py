@@ -279,8 +279,8 @@ def _open_data(path):
 def get_lhk_solved_data(path_instances, path_sols):
     """
     - instances[i][0] -> depot(x, y)
-    - instances[i][1] -> nodes(x, y) * 100
-    - instances[i][2] -> nodes(demand) * 100
+    - instances[i][1] -> nodes(x, y) * samples
+    - instances[i][2] -> nodes(demand) * samples
     - instances[i][3] -> capacity (of vehicle) (should be the same for all in theory)
 
     - sols[0][i][0] -> cost
