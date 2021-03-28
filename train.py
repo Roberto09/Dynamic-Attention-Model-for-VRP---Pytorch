@@ -7,7 +7,7 @@ from reinforce_baseline import validate
 
 from utils import generate_data_onfly, get_results, get_cur_time
 from time import gmtime, strftime
-from utils import FastTensorDataLoader
+from utils import FastTensorDataLoader, get_dev_of_mod
 
 class IterativeMean():
     def __init__(self):
@@ -64,7 +64,8 @@ def train_model(optimizer,
         loss.backward()
         grads = [param.grad.view(-1) for param in model.parameters()]
         grads = torch.cat(grads)
-        return loss, cost, grads
+        # we can return detached loss since it's backwarded already above
+        return loss.detach(), cost, grads
         
     # For plotting
     train_loss_results = []
@@ -122,7 +123,7 @@ def train_model(optimizer,
         set_decode_type(model_torch, "sampling")
 
         # Save model weights
-        torch.save(model_torch.state_dict(),'model_checkpoint_epoch_{}_{}'.format(epoch, filename))
+        torch.save(model_torch.state_dict(),'./checkpts/model_checkpoint_epoch_{}_{}'.format(epoch, filename))
 
         # Validate current model
         val_cost = validate(validation_dataset, model_torch, val_batch_size)

@@ -32,7 +32,7 @@ def create_data_on_disk(graph_size, num_samples, is_save=True, filename=None, is
     demand = torch.randint(low=1, high=10, size=(num_samples, graph_size), dtype=torch.float32) / CAPACITIES[graph_size]
 
     if is_save:
-        save_to_pickle('Validation_dataset_{}.pkl'.format(filename), (depo, graphs, demand))
+        save_to_pickle('./valsets/Validation_dataset_{}.pkl'.format(filename), (depo, graphs, demand))
 
     if is_return:
         return (depo, graphs, demand)
@@ -89,11 +89,11 @@ def get_results(train_loss_results, train_cost_results, val_cost, save_results=T
     epochs_num = len(train_loss_results)
 
     df_train = pd.DataFrame(data={'epochs': list(range(epochs_num)),
-                                  'loss': train_loss_results,
-                                  'cost': train_cost_results,
+                                  'loss': np.array(train_loss_results),
+                                  'cost': np.array(train_cost_results),
                                   })
     df_test = pd.DataFrame(data={'epochs': list(range(epochs_num)),
-                                 'val_сost': val_cost})
+                                 'val_сost': np.array(val_cost)})
     if save_results:
         df_train.to_excel('train_results_{}.xlsx'.format(filename), index=False)
         df_test.to_excel('test_results_{}.xlsx'.format(filename), index=False)
