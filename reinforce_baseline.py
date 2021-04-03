@@ -24,8 +24,8 @@ def copy_of_pt_model(model, embedding_dim=128, graph_size=20):
     new_model = AttentionDynamicModel(embedding_dim).to(get_dev_of_mod(model))
     set_decode_type(new_model, "sampling")
     new_model.eval()
-    _, _ = new_model(data_random)
-    
+    with torch.no_grad():
+        _, _ = new_model(data_random)
     model_dict = model.state_dict()
     new_model.load_state_dict(model_dict)
     
@@ -46,12 +46,14 @@ def rollout(model, dataset, batch_size = 1000, disable_tqdm = False):
     set_decode_type(model, "greedy")
 
     train_batches = FastTensorDataLoader(dataset[0],dataset[1],dataset[2], batch_size=batch_size, shuffle=False)
+    
+    model_was_training = model.training
+    model.eval()
 
-    if not model.training:
-        with torch.no_grad():
-            costs_list = get_costs_rollout(model, train_batches, disable_tqdm)
-    else:
+    with torch.no_grad():
         costs_list = get_costs_rollout(model, train_batches, disable_tqdm)
+
+    if model_was_training: model.train() # restore original model training state
 
     return torch.cat(costs_list, dim=0)
 
@@ -59,6 +61,7 @@ def rollout(model, dataset, batch_size = 1000, disable_tqdm = False):
 def validate(dataset, model, batch_size=1000):
     """Validates model on given dataset in greedy mode
     """
+    # rollout will set the model to eval mode and turn it back to it's original mode after it finishes
     val_costs = rollout(model, dataset, batch_size=batch_size)
     set_decode_type(model, "sampling")
     mean_cost = torch.mean(val_costs)
@@ -121,14 +124,15 @@ class RolloutBaseline:
             print('Baseline model loaded')
             self.model = load_pt_model(self.path_to_checkpoint,
                                        embedding_dim=self.embedding_dim,
-                                       graph_size=self.graph_size)
+                                       graph_size=self.graph_size,
+                                       device = get_dev_of_mod(model))
             self.model.eval()
         else:
             self.model = copy_of_pt_model(model,
                                           embedding_dim=self.embedding_dim,
                                           graph_size=self.graph_size)
             self.model.eval()
-            torch.save(self.model.state_dict(),'baseline_checkpoint_epoch_{}_{}'.format(epoch, self.filename))
+            torch.save(self.model.state_dict(),'./checkpts/baseline_checkpoint_epoch_{}_{}'.format(epoch, self.filename))
         
         # We generate a new dataset for baseline model on each baseline update to prevent possible overfitting
         self.dataset = generate_data_onfly(num_samples=self.num_samples, graph_size=self.graph_size)
@@ -161,7 +165,8 @@ class RolloutBaseline:
         else:
             v_ema = torch.tensor(0.0)
 
-        v_b, _ = self.model(batch)
+        with torch.no_grad():
+            v_b, _ = self.model(batch)
 
         # Combination of baseline cost and exp. moving average cost
         return self.alpha * v_b.detach() + (1 - self.alpha) * v_ema.detach()
@@ -208,7 +213,7 @@ class RolloutBaseline:
             print(f"alpha was updated to {self.alpha}")
 
             
-def load_pt_model(path, embedding_dim=128, graph_size=20, n_encode_layers=2):
+def load_pt_model(path, embedding_dim=128, graph_size=20, n_encode_layers=2, device='cpu'):
     """Load model weights from hd5 file
     """
     CAPACITIES = {10: 20.,
@@ -221,7 +226,8 @@ def load_pt_model(path, embedding_dim=128, graph_size=20, n_encode_layers=2):
                torch.rand((2, graph_size, 2), dtype=torch.float32),
                torch.randint(low=1, high= 10, size=(2, graph_size), dtype=torch.float32)/CAPACITIES[graph_size]]
 
-    model_loaded = AttentionDynamicModel(embedding_dim,n_encode_layers=n_encode_layers)
+    model_loaded = AttentionDynamicModel(embedding_dim,n_encode_layers=n_encode_layers).to(device)
+
     set_decode_type(model_loaded, "greedy")
     _, _ = model_loaded(data_random)
 

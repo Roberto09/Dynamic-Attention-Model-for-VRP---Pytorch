@@ -92,7 +92,7 @@ class AttentionDynamicModel(nn.Module):
         elif self.decode_type == "sampling":
             # logits has a shape of (batch_size, 1, n_nodes), we have to squeeze it
             # to (batch_size, n_nodes) since tf.random.categorical requires matrix
-            cat_dist = Categorical(logits[:, 0, :]) # creates categorical distribution from tensor (batch_size)
+            cat_dist = Categorical(logits=logits[:, 0, :]) # creates categorical distribution from tensor (batch_size)
             selected = cat_dist.sample() # takes a single sample from distribution
         else:
             assert False, "Unknown decode type"
@@ -159,7 +159,7 @@ class AttentionDynamicModel(nn.Module):
         compatibility = torch.tanh(compatibility) * self.tanh_clipping
         if mask is not None: compatibility = compatibility.masked_fill(mask == 1, -1e9)
 
-        log_p = F.softmax(compatibility, dim=-1)  # (batch_size, seq_len_q, seq_len_k)
+        log_p = F.log_softmax(compatibility, dim=-1)  # (batch_size, seq_len_q, seq_len_k)
 
         return log_p
 
@@ -227,6 +227,7 @@ class AttentionDynamicModel(nn.Module):
                 state.step(selected.detach().cpu())
 
                 ll += self.get_likelihood_selection(log_p[:, 0, :].cpu(), selected.detach().cpu())
+                
                 sequences.append(selected.detach().cpu())
                 # torch.cuda.empty_cache()    
             # torch.cuda.empty_cache()
