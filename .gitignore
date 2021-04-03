@@ -1,4 +1,6 @@
 /.ipynb_checkpoints
 /__pycache__
+/lkh_data/*
+/.vscode
 /checkpts/*
 /valsets/*

@@ -8,6 +8,13 @@ import numpy as np
 from datetime import datetime
 import time
 
+CAPACITIES = {
+        10: 20.,
+        20: 30.,
+        50: 40.,
+        100: 50.
+}
+
 def set_random_seed(seed):
     torch.manual_seed(seed)
 
@@ -16,12 +23,6 @@ def create_data_on_disk(graph_size, num_samples, is_save=True, filename=None, is
     """Generate validation dataset (with SEED) and save
     """
 
-    CAPACITIES = {
-        10: 20.,
-        20: 30.,
-        50: 40.,
-        100: 50.
-    }
     set_random_seed(seed)
     depo = torch.rand((num_samples, 2))
 
@@ -70,13 +71,7 @@ def read_from_pickle(path, return_data_set=True, num_samples=None):
 def generate_data_onfly(num_samples=10000, graph_size=20):
     """Generate temp dataset in memory
     """
-
-    CAPACITIES = {
-        10: 20.,
-        20: 30.,
-        50: 40.,
-        100: 50.
-    }
+    
     depo = torch.rand((num_samples, 2))
     graphs = torch.rand((num_samples, graph_size, 2))
     demand = torch.randint(low=1, high=10, size=(num_samples, graph_size), dtype=torch.float32) / CAPACITIES[graph_size]
@@ -271,3 +266,39 @@ def get_clean_path(arr):
 
 def get_dev_of_mod(model):
     return next(model.parameters()).device
+
+
+def _open_data(path):
+    return open(path, 'rb')
+
+def get_lhk_solved_data(path_instances, path_sols):
+    """
+    - instances[i][0] -> depot(x, y)
+    - instances[i][1] -> nodes(x, y) * samples
+    - instances[i][2] -> nodes(demand) * samples
+    - instances[i][3] -> capacity (of vehicle) (should be the same for all in theory)
+
+    - sols[0][i][0] -> cost
+    - sols[0][i][1] -> path (doesn't include depot at the end)
+    - sols[1] -> ?
+    - sols[0][1][2] -> ?
+    """
+
+    with _open_data(path_instances) as f:
+        instances_data = pickle.load(f) 
+    with _open_data(path_sols) as f:
+        sols_data = pickle.load(f) 
+
+    capacity_denominator = CAPACITIES[len(instances_data[0][1])]
+
+    depot_locs = (list(map(lambda x: x[0], instances_data))) # (samples, 2)
+    nodes_locs = (list(map(lambda x: x[1], instances_data)))  # (samples, nodes, 2)
+    nodes_demand = (list(map(lambda x: list(map(lambda d: d/capacity_denominator, x[2])), instances_data))) # (samples, nodes)
+    instances = (depot_locs, nodes_locs, nodes_demand)
+
+    path_indices = list(map(lambda x: x[1], sols_data[0])) # (samples, path_len)
+    costs = list(map(lambda x: x[0], sols_data[0])) # (samples)
+
+    capacities = (list(map(lambda x: x[3], instances_data))) # (samples)
+
+    return instances, path_indices, costs, capacities
