@@ -95,7 +95,7 @@ def train_model(optimizer,
         train_batches = FastTensorDataLoader(data[0],data[1],data[2], batch_size=batch, shuffle=False)
         
         for num_batch, x_batch in tqdm(enumerate(train_batches), desc="batch calculation at epoch {}".format(epoch)):
-
+            optimizer.zero_grad()
             # Optimize the model
             loss_value, cost_val, grads = grad(model_torch, x_batch, baseline, num_batch)
 
