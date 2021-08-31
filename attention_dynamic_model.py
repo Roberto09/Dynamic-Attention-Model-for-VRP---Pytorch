@@ -185,7 +185,32 @@ class AttentionDynamicModel(nn.Module):
 
         return K_tanh, Q_context, K, V
 
-    def forward(self, inputs, return_pi=False):
+
+    def fwd_rein_loss(self, inputs, baseline, bl_vals, num_batch, return_pi=False):
+        """
+        Forward and calculate loss for REINFORCE algorithm in a memory efficient way.
+        This sacrifices a bit of performance but is way better in memory terms and works
+        by reordering the terms in the gradient formula such that we don't store gradients
+        for all the seguence for a long time which hence produces a lot of memory consumption.
+        """
+
+        on_training = self.training
+        self.eval()
+        with torch.no_grad():
+            cost, log_likelihood, seq = self(inputs, True)
+            bl_val = bl_vals[num_batch] if bl_vals is not None else baseline.eval(inputs, cost)
+            pre_cost = cost - bl_val.detach()
+            detached_loss = torch.mean((pre_cost) * log_likelihood)
+
+        if on_training: self.train()
+        return detached_loss, self(inputs, return_pi, seq, pre_cost)
+
+    def forward(self, inputs, return_pi=False, pre_selects=None, pre_cost=None):
+        """
+        Forward method. Works as expected except and as described on the paper, however
+        if pre_selects is None which hence implies that pre_cost should be none it's because
+        fwd_rein_loss is calling it; check that method for a description of why this is useful.
+        """
 
         self.batch_size = inputs[0].shape[0]
 
@@ -194,7 +219,10 @@ class AttentionDynamicModel(nn.Module):
         sequences = []
         ll = torch.zeros(self.batch_size)
 
+        if pre_selects is not None:
+            pre_selects = pre_selects.transpose(0, 1)
         # Perform decoding steps
+        pre_select_idx = 0
         while not state.all_finished():
 
             state.i = torch.zeros(1, dtype=torch.int64)
@@ -222,22 +250,31 @@ class AttentionDynamicModel(nn.Module):
                 log_p = self.get_log_p(mha, K_tanh, mask)  # (batch_size, 1, n_nodes)
 
                 # next step is to select node
-                selected = self._select_node(log_p.detach()) # (batch_size,)
+                if pre_selects is None:
+                    selected = self._select_node(log_p.detach()) # (batch_size,)
+                else:
+                    selected = pre_selects[pre_select_idx]
 
                 state.step(selected.detach().cpu())
 
-                ll += self.get_likelihood_selection(log_p[:, 0, :].cpu(), selected.detach().cpu())
-                
+                curr_ll = self.get_likelihood_selection(log_p[:, 0, :].cpu(), selected.detach().cpu())
+                if pre_selects is not None:
+                    curr_loss = (curr_ll * pre_cost).sum() / self.batch_size
+                    curr_loss.backward(retain_graph=True)
+                    curr_ll = curr_ll.detach()
+                ll += curr_ll
+
                 sequences.append(selected.detach().cpu())
+                pre_select_idx += 1
                 # torch.cuda.empty_cache()    
             # torch.cuda.empty_cache()
 
         pi = torch.stack(sequences, dim=1) # (batch_size, len(outputs))
         cost = self.problem.get_costs((inputs[0].detach().cpu(), inputs[1].detach().cpu(), inputs[2].detach().cpu()), pi)
-        if return_pi:
-            return cost, ll, pi
 
-        return cost, ll
+        ret = [cost, ll]
+        if return_pi: ret.append(pi)
+        return ret
 
     def set_input_device(self, inp_tens):
         if self.dev is None: self.dev = get_dev_of_mod(self)

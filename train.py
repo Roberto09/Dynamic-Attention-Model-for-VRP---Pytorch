@@ -34,7 +34,8 @@ def train_model(optimizer,
                 grad_norm_clipping = 1.0,
                 batch_verbose = 1000,
                 graph_size = 20,
-                filename = None
+                filename = None,
+                mem_efficient=True,
                 ):
 
     if filename is None:
@@ -57,16 +58,23 @@ def train_model(optimizer,
 
         return reinforce_loss, torch.mean(cost)
 
+    def mem_efficient_rein_loss(model, inputs, baseline, num_batch):
+        rein_detached_loss, (cost, log_likelihood) = model.fwd_rein_loss(inputs, baseline, bl_vals, num_batch)
+        return rein_detached_loss, torch.mean(cost)
+
     def grad(model, inputs, baseline, num_batch):
         """Calculate gradients
         """
-        loss, cost = rein_loss(model, inputs, baseline, num_batch)
-        loss.backward()
+        if mem_efficient:
+            loss, cost = mem_efficient_rein_loss(model, inputs, baseline, num_batch)
+        else:
+            loss, cost = rein_loss(model, inputs, baseline, num_batch)
+            loss.backward()
         grads = [param.grad.view(-1) for param in model.parameters()]
         grads = torch.cat(grads)
         # we can return detached loss since it's backwarded already above
         return loss.detach(), cost, grads
-        
+
     # For plotting
     train_loss_results = []
     train_cost_results = []
