@@ -8,5 +8,4 @@ To run take a look at **./test_20n_1024bs.ipynb**. This simple notebook was used
 
 About the memory-efficient gradient trick:
 
-I noticed that we could rearrange the formula of the gradients being used such that when translating it to code we sacrifice runtime in order to stop storing huge computation graphs in cuda memory. This trick significantly reduces the memory being used; if you want to see exactly what it is please take a look into the commit itself (https://github.com/Roberto09/Dynamic-Attention-Model-for-VRP---Pytorch/commit/fc1f9a8b6650fcd3cae23fb18db826147a29c3a1). I plan to release a deeper explanation soon on why this works.
-
+I noticed that we could rearrange the formula of the gradients being used such that when translating it to code we sacrifice runtime in order to stop storing huge computation graphs in cuda memory. This trick significantly reduces the memory being used; if you want to see exactly what it is please take a look into the commit itself (https://github.com/Roberto09/Dynamic-Attention-Model-for-VRP---Pytorch/commit/fc1f9a8b6650fcd3cae23fb18db826147a29c3a1). The explanation of how/why this works can be found in the "Gradient Computation Improvement for AM-D" section of a paper we wrote (https://arxiv.org/abs/2211.13922).
